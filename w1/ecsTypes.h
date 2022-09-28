@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include "GameSettings.h"
 
 struct Position;
 struct MovePos;
@@ -45,27 +47,37 @@ struct PatrolPos
   int y = 0;
 };
 
+struct Sleep {};
+
+struct Eat{};
+
+struct Craft {};
+
+struct Market {};
+
 struct Hitpoints
 {
   float hitpoints = 10.f;
 };
 
-enum Actions
+enum class Actions : uint32_t
 {
-  EA_NOP = 0,
-  EA_MOVE_START,
-  EA_MOVE_LEFT = EA_MOVE_START,
-  EA_MOVE_RIGHT,
-  EA_MOVE_DOWN,
-  EA_MOVE_UP,
-  EA_MOVE_END,
-  EA_ATTACK = EA_MOVE_END,
-  EA_NUM
+  NOP = 0,
+  JUMP,
+  ACT,
+  MOVE_START,
+  MOVE_LEFT = MOVE_START,
+  MOVE_RIGHT,
+  MOVE_DOWN,
+  MOVE_UP,
+  MOVE_END,
+  ATTACK = MOVE_END,
+  NUM
 };
 
 struct Action
 {
-  int action = 0;
+  Actions action = Actions::NOP;
 };
 
 struct NumActions
@@ -84,6 +96,12 @@ struct HealAmount
   float amount = 0.f;
 };
 
+struct SelfhealAmount
+{
+  float amount = 5.f;
+};
+
+
 struct PowerupAmount
 {
   float amount = 0.f;
@@ -95,6 +113,9 @@ struct PlayerInput
   bool right = false;
   bool up = false;
   bool down = false;
+
+  bool jump = false;
+  bool act = false;
 };
 
 struct Symbol
@@ -104,7 +125,7 @@ struct Symbol
 
 struct Color
 {
-  uint32_t color;
+  Colors color;
 };
 
 struct IsPlayer {};

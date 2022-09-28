@@ -2,26 +2,21 @@
 
 StateMachine::~StateMachine()
 {
-  for (State* state : states)
-    delete state;
-  states.clear();
-  for (auto &transList : transitions)
-    for (auto &transition : transList)
-      delete transition.first;
-  transitions.clear();
 }
 
 void StateMachine::act(float dt, flecs::world &ecs, flecs::entity entity)
 {
   if (curStateIdx < states.size())
   {
-    for (const std::pair<StateTransition*, int> &transition : transitions[curStateIdx])
-      if (transition.first->isAvailable(ecs, entity))
+      for (const auto& [transition, ind] : transitions[curStateIdx])
       {
-        states[curStateIdx]->exit();
-        curStateIdx = transition.second;
-        states[curStateIdx]->enter();
-        break;
+          if (transition->isAvailable(ecs, entity))
+          {
+              states[curStateIdx]->exit();
+              curStateIdx = ind;
+              states[curStateIdx]->enter();
+              break;
+          }
       }
     states[curStateIdx]->act(dt, ecs, entity);
   }
@@ -29,16 +24,16 @@ void StateMachine::act(float dt, flecs::world &ecs, flecs::entity entity)
     curStateIdx = 0;
 }
 
-int StateMachine::addState(State *st)
+int StateMachine::addState(std::unique_ptr<State> st)
 {
   int idx = states.size();
-  states.push_back(st);
-  transitions.push_back(std::vector<std::pair<StateTransition*, int>>());
+  states.push_back(std::move(st));
+  transitions.push_back(std::vector<std::pair<std::unique_ptr<StateTransition>, int>>());
   return idx;
 }
 
-void StateMachine::addTransition(StateTransition *trans, int from, int to)
+void StateMachine::addTransition(std::unique_ptr<StateTransition> trans, int from, int to)
 {
-  transitions[from].push_back(std::make_pair(trans, to));
+  transitions[from].push_back(std::make_pair(std::move(trans), to));
 }
 
