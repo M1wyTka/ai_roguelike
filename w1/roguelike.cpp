@@ -49,47 +49,48 @@ static void add_berserker_sm(flecs::entity entity)
 
 std::unique_ptr<State> create_crafter_main() 
 {
-    auto main_sm = create_inner_state_machine();
+    auto main_sm = std::make_unique<StateMachine>();
+    //auto main_sm = create_inner_state_machine();
     
-    int buy = main_sm->addState(create_nop_state());
-    int sell = main_sm->addState(create_nop_state());
-    int craft = main_sm->addState(create_nop_state());
+    int buy = main_sm->addState(create_market_state());
+    int sell = main_sm->addState(create_market_state());
+    int craft = main_sm->addState(create_craft_state());
 
     int go_buy = main_sm->addState(create_move_to_market_state());
     int go_sell = main_sm->addState(create_move_to_market_state());
     int go_craft = main_sm->addState(create_move_to_craft_state());
 
-    main_sm->addTransition(create_hitpoints_less_than_transition(500.f), buy, go_craft);
-    main_sm->addTransition(create_hitpoints_less_than_transition(450.f), go_craft, craft);
-    main_sm->addTransition(create_hitpoints_less_than_transition(400.f), craft, go_sell);
-    main_sm->addTransition(create_hitpoints_less_than_transition(350.f), go_sell, sell);
-    main_sm->addTransition(create_hitpoints_less_than_transition(300.f), sell, go_craft);
-    main_sm->addTransition(create_hitpoints_less_than_transition(250.f), sell, go_buy);
-    main_sm->addTransition(create_hitpoints_less_than_transition(200.f), go_buy, buy);
+    main_sm->addTransition(create_act_pressed_transition(), buy, go_craft);
+    main_sm->addTransition(create_act_pressed_transition(), go_craft, craft);
+    main_sm->addTransition(create_act_pressed_transition(), craft, go_sell);
+    main_sm->addTransition(create_act_pressed_transition(), go_sell, sell);
+    main_sm->addTransition(create_act_pressed_transition(), sell, go_craft);
+    main_sm->addTransition(create_meh_pressed_transition(), sell, go_buy);
+    main_sm->addTransition(create_act_pressed_transition(), go_buy, buy);
 
-    return main_sm;
+    return std::make_unique<StateMachineState>(std::move(main_sm));
 }
 
 std::unique_ptr<State> create_crafter_eat()
 {
-    auto eat_sm = create_inner_state_machine();
+    auto eat_sm = std::make_unique<StateMachine>();
     int go_to_eat = eat_sm->addState(create_eat_state());
     int eat = eat_sm->addState(create_nop_state());
 
     eat_sm->addTransition(create_hitpoints_less_than_transition(100.f), go_to_eat, eat);
 
-    return eat_sm;
+    return std::make_unique<StateMachineState>(std::move(eat_sm));
 }
 
 std::unique_ptr<State> create_crafter_sleep()
 {
-    auto sleep_sm = create_inner_state_machine();
+    auto sleep_sm = std::make_unique<StateMachine>();
     int go_to_sleep = sleep_sm->addState(create_move_to_sleep_state());
     int sleep = sleep_sm->addState(create_nop_state());
 
     sleep_sm->addTransition(create_hitpoints_less_than_transition(50.f), go_to_sleep, sleep);
 
-    return sleep_sm;
+    return std::make_unique<StateMachineState>(std::move(sleep_sm));
 }
 
 static void add_crafter_sm(flecs::entity entity)
@@ -101,16 +102,16 @@ static void add_crafter_sm(flecs::entity entity)
             int sleep_sm = sm.addState(create_crafter_sleep());
             int eat_sm = sm.addState(create_crafter_eat());
             
-            sm.addTransition(create_hitpoints_less_than_transition(500.f), main_sm, sleep_sm);
+            sm.addTransition(create_meh_pressed_transition(), main_sm, sleep_sm);
             sm.addTransition(
-                create_and_transition(create_enemy_available_transition(1.f), create_jump_pressed_transition())
+                create_and_transition(create_enemy_available_transition(2.f), create_jump_pressed_transition())
                 , sleep_sm, main_sm);
             
             sm.addTransition(create_jump_pressed_transition(), main_sm, eat_sm);
-            sm.addTransition(create_act_pressed_transition(), eat_sm, main_sm);
+            sm.addTransition(create_enemy_available_transition(2.f), eat_sm, main_sm);
             sm.addTransition(
-                create_and_transition(create_jump_pressed_transition(), create_act_pressed_transition()),
-                sleep_sm, eat_sm);
+                create_and_transition(create_jump_pressed_transition(), create_act_pressed_transition())
+                , sleep_sm, eat_sm);
 
             sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), main_sm, patrol);
             sm.addTransition(create_enemy_available_transition(3.f), patrol, main_sm);
@@ -243,7 +244,9 @@ static void register_input_system(flecs::world& ecs)
                 bool right = app_keypressed(GLFW_KEY_RIGHT);
                 bool up = app_keypressed(GLFW_KEY_UP);
                 bool down = app_keypressed(GLFW_KEY_DOWN);
-                bool jump = app_keypressed(GLFW_KEY_SPACE);
+                bool jump = app_keypressed(GLFW_KEY_F);
+                bool act = app_keypressed(GLFW_KEY_Q);
+                bool meh = app_keypressed(GLFW_KEY_E);
 
                 if (left && !inp.left)
                     a.action = Actions::MOVE_LEFT;
@@ -255,13 +258,18 @@ static void register_input_system(flecs::world& ecs)
                     a.action = Actions::MOVE_DOWN;
                 if (jump && !inp.jump)
                     a.action = Actions::JUMP;
-
-
+                if (act && !inp.act)
+                    a.action = Actions::ACT;
+                if (meh && !inp.meh)
+                    a.action = Actions::MEH;
+                                  
                 inp.left = left;
                 inp.right = right;
                 inp.up = up;
                 inp.down = down;
                 inp.jump = jump;
+                inp.act = act;
+                inp.meh = meh;
             });
 }
 
@@ -302,7 +310,7 @@ void init_roguelike(flecs::world &ecs)
   add_selfhealing_sm(create_monster(ecs, 4, 4, Colors::TURQUOISE));
 
   create_player(ecs, 0, 0);
-  //add_crafter_sm(create_monster(ecs, 4, 4, Colors::TURQUOISE));
+  add_crafter_sm(create_monster(ecs, 4, 4, Colors::TURQUOISE));
 
   //create_powerup(ecs, 7, 7, 10.f);
   //create_powerup(ecs, 10, -6, 10.f);
@@ -311,10 +319,10 @@ void init_roguelike(flecs::world &ecs)
   //create_heal(ecs, -5, -5, 50.f);
   //create_heal(ecs, -5, 5, 50.f);
   //
-  //create_eat_spot(ecs, -9, 9);
-  //create_sleep_spot(ecs, 9, 9);
-  //create_craft_spot(ecs, 9, -9);
-  //create_market_spot(ecs, -9, -9);
+  create_eat_spot(ecs, -9, 9);
+  create_sleep_spot(ecs, 9, 9);
+  create_craft_spot(ecs, 9, -9);
+  create_market_spot(ecs, -9, -9);
 }
 
 static bool is_player_acted(flecs::world &ecs)

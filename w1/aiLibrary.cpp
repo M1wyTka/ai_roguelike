@@ -188,7 +188,7 @@ public:
   {
     on_closest_enemy_pos(ecs, entity, [&](Action &a, const Position &pos, const Position &enemy_pos)
     {
-      bgfx::dbgTextPrintf(0, 4, 0x0f, "MoveToEnemy");
+            std::cout << "MoveToEnemy";
       a.action = move_towards(pos, enemy_pos);
     });
   }
@@ -203,7 +203,7 @@ public:
     {
         on_closest_eat_pos(ecs, entity, [&](Action& a, const Position& pos, const Position& enemy_pos)
             {
-                bgfx::dbgTextPrintf(0, 4, 0x0f, "MoveToEat");
+                std::cout << "MoveToEat";
                 a.action = move_towards(pos, enemy_pos);
             });
     }
@@ -218,7 +218,7 @@ public:
     {
         on_closest_market_pos(ecs, entity, [&](Action& a, const Position& pos, const Position& enemy_pos)
             {
-                bgfx::dbgTextPrintf(0, 4, 0x0f, "MoveToMarket");
+                std::cout << "MoveToMarket";
                 a.action = move_towards(pos, enemy_pos);
             });
     }
@@ -233,7 +233,7 @@ public:
     {
         on_closest_sleep_pos(ecs, entity, [&](Action& a, const Position& pos, const Position& enemy_pos)
             {
-                bgfx::dbgTextPrintf(0, 4, 0x0f, "MoveToSleep");
+                std::cout << "MoveToSleep";
                 a.action = move_towards(pos, enemy_pos);
             });
     }
@@ -248,7 +248,7 @@ public:
     {
         on_closest_craft_pos(ecs, entity, [&](Action& a, const Position& pos, const Position& enemy_pos)
             {
-                bgfx::dbgTextPrintf(0, 4, 0x0f, "MoveToCraft");
+                std::cout << "MoveToCraft";
                 a.action = move_towards(pos, enemy_pos);
             });
     }
@@ -306,7 +306,6 @@ public:
     {
         entity.set([&](const SelfhealAmount& heal, Hitpoints& hp, Action& a)
             {
-                bgfx::dbgTextPrintf(0, 4, 0x0f, "hp: %d", (int)hp.hitpoints);
                 hp.hitpoints += heal.amount;
                 std::cout << hp.hitpoints;
             });
@@ -326,7 +325,7 @@ public:
     {
         entity.set([&](const SelfhealAmount& heal, Hitpoints& hp, Action& a)
             {
-                bgfx::dbgTextPrintf(0, 5, 0x0f, "Crafting\n");
+                std::cout << "Crafting\n";
             });
     }
 };
@@ -341,7 +340,7 @@ public:
     {
         entity.set([&](const SelfhealAmount& heal, Hitpoints& hp, Action& a)
             {
-                bgfx::dbgTextPrintf(0, 5, 0x0f, "Eating\n");
+                std::cout << "Eating\n";
             });
     }
 };
@@ -356,7 +355,7 @@ public:
     {
         entity.set([&](const SelfhealAmount& heal, Hitpoints& hp, Action& a)
             {
-                bgfx::dbgTextPrintf(0, 5, 0x0f, "Marketing\n");
+                std::cout << "Marketing\n";
             });
     }
 };
@@ -371,7 +370,7 @@ public:
     {
         entity.set([&](const SelfhealAmount& heal, Hitpoints& hp, Action& a)
             {
-                bgfx::dbgTextPrintf(0, 5, 0x0f, "Sleeping\n");
+                std::cout << "Sleeping\n";
             });
     }
 };
@@ -394,7 +393,7 @@ public:
         bool jump = false;
         inputQuery.each([&](flecs::entity enemy, PlayerInput input)
             {
-                jump |= input.up;
+                jump |= input.jump;
             });
         return jump;
     };
@@ -416,6 +415,21 @@ public:
     };
 };
 
+class MehPressedTransition : public StateTransition
+{
+public:
+    MehPressedTransition() {};
+    bool isAvailable(flecs::world& ecs, flecs::entity entity) const override
+    {
+        static auto inputQuery = ecs.query<const PlayerInput>();
+        bool meh = false;
+        inputQuery.each([&](flecs::entity enemy, PlayerInput input)
+            {
+                meh |= input.meh;
+            });
+        return meh;
+    };
+};
 
 class EnemyAvailableTransition : public StateTransition
 {
@@ -572,8 +586,6 @@ std::unique_ptr<State> create_market_state()
     return std::make_unique<MarketState>();
 }
 
-
-
 std::unique_ptr<State> create_flee_from_enemy_state()
 {
   return std::make_unique<FleeFromEnemyState>();
@@ -592,11 +604,6 @@ std::unique_ptr<State> create_patrol_state(float patrol_dist)
 std::unique_ptr<State> create_nop_state()
 {
   return std::make_unique<NopState>();
-}
-
-std::unique_ptr<StateMachine> create_inner_state_machine()
-{
-  return std::make_unique<StateMachine>();
 }
 
 // transitions
@@ -630,6 +637,10 @@ std::unique_ptr<StateTransition> create_act_pressed_transition()
     return std::make_unique<ActPressedTransition>();
 }
 
+std::unique_ptr<StateTransition> create_meh_pressed_transition() 
+{
+    return std::make_unique<MehPressedTransition>();
+}
  
 std::unique_ptr<StateTransition> create_negate_transition(std::unique_ptr<StateTransition> in)
 {

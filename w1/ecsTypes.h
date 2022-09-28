@@ -65,6 +65,7 @@ enum class Actions : uint32_t
   NOP = 0,
   JUMP,
   ACT,
+  MEH,
   MOVE_START,
   MOVE_LEFT = MOVE_START,
   MOVE_RIGHT,
@@ -116,6 +117,8 @@ struct PlayerInput
 
   bool jump = false;
   bool act = false;
+  bool attack = false;
+  bool meh = false;
 };
 
 struct Symbol

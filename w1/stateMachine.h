@@ -19,7 +19,7 @@ public:
   virtual bool isAvailable(flecs::world &ecs, flecs::entity entity) const = 0;
 };
 
-class StateMachine : public State
+class StateMachine
 {
 public:
   StateMachine() = default;
@@ -34,7 +34,7 @@ public:
   void enter() const {};
   void exit() const {};
 
-  void act(float dt, flecs::world &ecs, flecs::entity entity) override;
+  void act(float dt, flecs::world &ecs, flecs::entity entity);
 
   int addState(std::unique_ptr<State> st);
   void addTransition(std::unique_ptr<StateTransition> trans, int from, int to);
@@ -45,3 +45,14 @@ private:
 	std::vector<std::vector<std::pair<std::unique_ptr<StateTransition>, int>>> transitions{};
 };
 
+class StateMachineState : public State
+{
+	std::unique_ptr<StateMachine> m_state_machine;
+public:
+	StateMachineState(std::unique_ptr<StateMachine>&& sm) : m_state_machine(std::move(sm)) {}
+	void enter() const override {}
+	void exit() const override {}
+	void act(float/* dt*/, flecs::world& ecs, flecs::entity entity) override {
+		m_state_machine->act(0.f, ecs, entity);
+	}
+};
