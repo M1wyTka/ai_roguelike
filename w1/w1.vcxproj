@@ -123,7 +123,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../3rdParty/bgfx/include;../3rdParty/bx/include;../3rdParty/bimg/include;../3rdParty/bx/include/compat/msvc;../3rdParty/glfw/include;../3rdParty/bgfx/examples/common;../3rdParty/flecs</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/Zc:__cplusplus</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -156,6 +156,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="app.h" />
+    <ClInclude Include="FunUtilities.h" />
+    <ClInclude Include="GameSettings.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\3rdParty\flecs\flecs.c" />
