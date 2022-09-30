@@ -158,6 +158,9 @@
     <ClInclude Include="app.h" />
     <ClInclude Include="FunUtilities.h" />
     <ClInclude Include="GameSettings.h" />
+    <ClInclude Include="MathUtilities.h" />
+    <ClInclude Include="States.h" />
+    <ClInclude Include="StateTransitions.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\3rdParty\flecs\flecs.c" />
@@ -167,6 +170,8 @@
     <ClCompile Include="protocol.cpp" />
     <ClCompile Include="roguelike.cpp" />
     <ClCompile Include="stateMachine.cpp" />
+    <ClCompile Include="States.cpp" />
+    <ClCompile Include="StateTransitions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\3rdParty\bgfx\.build\projects\vs2019\bgfx.vcxproj">

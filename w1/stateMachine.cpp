@@ -24,15 +24,15 @@ void StateMachine::act(float dt, flecs::world &ecs, flecs::entity entity)
     curStateIdx = 0;
 }
 
-int StateMachine::addState(std::unique_ptr<State> st)
+size_t StateMachine::addState(std::unique_ptr<State> st)
 {
-  int idx = states.size();
+  size_t idx = states.size();
   states.push_back(std::move(st));
-  transitions.push_back(std::vector<std::pair<std::unique_ptr<StateTransition>, int>>());
+  transitions.push_back(std::vector<std::pair<std::unique_ptr<StateTransition>, size_t>>());
   return idx;
 }
 
-void StateMachine::addTransition(std::unique_ptr<StateTransition> trans, int from, int to)
+void StateMachine::addTransition(std::unique_ptr<StateTransition> trans, size_t from, size_t to)
 {
   transitions[from].push_back(std::make_pair(std::move(trans), to));
 }

@@ -15,19 +15,27 @@ static void add_patrol_attack_flee_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    int patrol = sm.addState(create_patrol_state(3.f));
-    int moveToEnemy = sm.addState(create_move_to_enemy_state());
-    int fleeFromEnemy = sm.addState(create_flee_from_enemy_state());
+    auto patrol        = sm.addState(State::make<PatrolState>(3.f));
+    auto moveToEnemy   = sm.addState(State::make<MoveToEnemyState>());
+    auto fleeFromEnemy = sm.addState(State::make<FleeFromEnemyState>());
 
-    sm.addTransition(create_enemy_available_transition(3.f), patrol, moveToEnemy);
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), moveToEnemy, patrol);
+    sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, moveToEnemy);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), moveToEnemy, patrol);
 
-    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(5.f)),
-                     moveToEnemy, fleeFromEnemy);
-    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(3.f)),
-                     patrol, fleeFromEnemy);
+    sm.addTransition(
+        create_and_transition(
+            StateTransition::make<HitpointsLessThanTransition>(60.f),
+            StateTransition::make<EnemyAvailableTransition>(5.f)
+        ),
+        moveToEnemy, fleeFromEnemy);
+    sm.addTransition(
+        create_and_transition(
+            StateTransition::make<HitpointsLessThanTransition>(60.f),
+            StateTransition::make<EnemyAvailableTransition>(3.f)
+        ),
+        patrol, fleeFromEnemy);
 
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(7.f)), fleeFromEnemy, patrol);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(7.f)), fleeFromEnemy, patrol);
   });
 }
 
@@ -35,86 +43,111 @@ static void add_berserker_sm(flecs::entity entity)
 {
     entity.get([](StateMachine& sm)
     {
-        int patrol = sm.addState(create_patrol_state(3.f));
-        int moveToEnemy = sm.addState(create_move_to_enemy_state());
+        auto patrol      = sm.addState(State::make<PatrolState>(3.f));
+        auto moveToEnemy = sm.addState(State::make<MoveToEnemyState>());
 
         sm.addTransition(
-            create_or_transition(create_enemy_available_transition(3.f), create_hitpoints_less_than_transition(60.f)),
+            create_or_transition(
+                StateTransition::make<EnemyAvailableTransition>(3.f),
+                StateTransition::make<HitpointsLessThanTransition>(60.f)
+            ),
             patrol, moveToEnemy);
-        sm.addTransition(create_negate_transition(
-                        create_or_transition(create_enemy_available_transition(5.f), create_hitpoints_less_than_transition(60.f)))
-                        , moveToEnemy, patrol);
+
+        sm.addTransition(
+            create_negate_transition(
+                        create_or_transition(
+                            StateTransition::make<EnemyAvailableTransition>(5.f),
+                            StateTransition::make<HitpointsLessThanTransition>(60.f)
+                        )
+            ),
+            moveToEnemy, patrol);
     });
 }
 
 std::unique_ptr<State> create_crafter_main() 
 {
     auto main_sm = std::make_unique<StateMachine>();
-    //auto main_sm = create_inner_state_machine();
     
-    int buy = main_sm->addState(create_market_state());
-    int sell = main_sm->addState(create_market_state());
-    int craft = main_sm->addState(create_craft_state());
+    auto buy   = main_sm->addState(State::make<MarketState>());
+    auto sell  = main_sm->addState(State::make<MarketState>());
+    auto craft = main_sm->addState(State::make<CraftState>());
 
-    int go_buy = main_sm->addState(create_move_to_market_state());
-    int go_sell = main_sm->addState(create_move_to_market_state());
-    int go_craft = main_sm->addState(create_move_to_craft_state());
+    auto go_buy   = main_sm->addState(State::make<MoveToTargetState<Market>>());
+    auto go_sell  = main_sm->addState(State::make<MoveToTargetState<Market>>());
+    auto go_craft = main_sm->addState(State::make<MoveToTargetState<Craft>>());
 
-    main_sm->addTransition(create_act_pressed_transition(), buy, go_craft);
-    main_sm->addTransition(create_act_pressed_transition(), go_craft, craft);
-    main_sm->addTransition(create_act_pressed_transition(), craft, go_sell);
-    main_sm->addTransition(create_act_pressed_transition(), go_sell, sell);
-    main_sm->addTransition(create_act_pressed_transition(), sell, go_craft);
-    main_sm->addTransition(create_meh_pressed_transition(), sell, go_buy);
-    main_sm->addTransition(create_act_pressed_transition(), go_buy, buy);
 
-    return std::make_unique<StateMachineState>(std::move(main_sm));
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), buy, go_craft);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_craft, craft);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), craft, go_sell);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_sell, sell);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), sell, go_craft);
+    main_sm->addTransition(StateTransition::make<MehPressedTransition>(), sell, go_buy);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_buy, buy);
+
+    return State::make<StateMachineState>(std::move(main_sm));
 }
 
 std::unique_ptr<State> create_crafter_eat()
 {
     auto eat_sm = std::make_unique<StateMachine>();
-    int go_to_eat = eat_sm->addState(create_eat_state());
-    int eat = eat_sm->addState(create_nop_state());
 
-    eat_sm->addTransition(create_hitpoints_less_than_transition(100.f), go_to_eat, eat);
+    auto go_to_eat = eat_sm->addState(State::make<MoveToTargetState<Eat>>());
+    auto eat       = eat_sm->addState(State::make<EatState>());
 
-    return std::make_unique<StateMachineState>(std::move(eat_sm));
+    eat_sm->addTransition(StateTransition::make<HitpointsLessThanTransition>(100.f), go_to_eat, eat);
+
+    return State::make<StateMachineState>(std::move(eat_sm));
 }
 
 std::unique_ptr<State> create_crafter_sleep()
 {
     auto sleep_sm = std::make_unique<StateMachine>();
-    int go_to_sleep = sleep_sm->addState(create_move_to_sleep_state());
-    int sleep = sleep_sm->addState(create_nop_state());
 
-    sleep_sm->addTransition(create_hitpoints_less_than_transition(50.f), go_to_sleep, sleep);
+    auto go_to_sleep = sleep_sm->addState(State::make<MoveToTargetState<Sleep>>());
+    auto sleep       = sleep_sm->addState(State::make<SleepState>());
 
-    return std::make_unique<StateMachineState>(std::move(sleep_sm));
+    sleep_sm->addTransition(StateTransition::make<HitpointsLessThanTransition>(50.f), go_to_sleep, sleep);
+
+    return State::make<StateMachineState>(std::move(sleep_sm));
 }
 
 static void add_crafter_sm(flecs::entity entity)
 {
     entity.get([](StateMachine& sm)
         {
-            int patrol = sm.addState(create_patrol_state(3.f));
-            int main_sm = sm.addState(create_crafter_main());
-            int sleep_sm = sm.addState(create_crafter_sleep());
-            int eat_sm = sm.addState(create_crafter_eat());
+            auto patrol   = sm.addState(State::make<PatrolState>(3.f));
+            auto main_sm  = sm.addState(create_crafter_main());
+            auto sleep_sm = sm.addState(create_crafter_sleep());
+            auto eat_sm   = sm.addState(create_crafter_eat());
             
-            sm.addTransition(create_meh_pressed_transition(), main_sm, sleep_sm);
+            sm.addTransition(StateTransition::make<MehPressedTransition>(), main_sm, sleep_sm);
             sm.addTransition(
-                create_and_transition(create_enemy_available_transition(2.f), create_jump_pressed_transition())
+                create_and_transition(
+                    StateTransition::make<EnemyAvailableTransition>(2.f),
+                    StateTransition::make<JumpPressedTransition>()
+                )
                 , sleep_sm, main_sm);
             
-            sm.addTransition(create_jump_pressed_transition(), main_sm, eat_sm);
-            sm.addTransition(create_enemy_available_transition(2.f), eat_sm, main_sm);
+            sm.addTransition(StateTransition::make<JumpPressedTransition>(), main_sm, eat_sm);
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(2.f), eat_sm, main_sm);
             sm.addTransition(
-                create_and_transition(create_jump_pressed_transition(), create_act_pressed_transition())
+                create_and_transition(
+                    StateTransition::make<JumpPressedTransition>(),
+                    StateTransition::make<ActPressedTransition>()
+                )
                 , sleep_sm, eat_sm);
+            
+            sm.addTransition(
+                create_and_transition(
+                    StateTransition::make<JumpPressedTransition>(),
+                    StateTransition::make<ActPressedTransition>()),
+                sleep_sm, eat_sm);
 
-            sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), main_sm, patrol);
-            sm.addTransition(create_enemy_available_transition(3.f), patrol, main_sm);
+
+            sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), main_sm, patrol);
+            
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, main_sm);
         });
 }
 
@@ -122,17 +155,17 @@ static void add_selfhealing_sm(flecs::entity entity)
 {
     entity.get([](StateMachine& sm)
         {
-            int patrol = sm.addState(create_patrol_state(3.f));
-            int moveToEnemy = sm.addState(create_move_to_enemy_state());
-            int selfheal = sm.addState(create_selfheal_state(5.f));
+            auto patrol      = sm.addState(State::make<PatrolState>(3.f));
+            auto moveToEnemy = sm.addState(State::make<MoveToEnemyState>());
+            auto selfheal    = sm.addState(State::make<SelfhealState>(5.f));
 
-            sm.addTransition(create_enemy_available_transition(3.f), patrol, moveToEnemy);
-            sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), moveToEnemy, patrol);
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, moveToEnemy);
+            sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), moveToEnemy, patrol);
 
-            sm.addTransition(create_hitpoints_less_than_transition(60.0f), moveToEnemy, selfheal);
-            sm.addTransition(create_hitpoints_less_than_transition(60.0f), patrol, selfheal);
+            sm.addTransition(StateTransition::make<HitpointsLessThanTransition>(60.0f), moveToEnemy, selfheal);
+            sm.addTransition(StateTransition::make<HitpointsLessThanTransition>(60.0f), patrol, selfheal);
 
-            sm.addTransition(create_negate_transition(create_hitpoints_less_than_transition(60.0f)), selfheal, patrol);
+            sm.addTransition(create_negate_transition(StateTransition::make<HitpointsLessThanTransition>(60.0f)), selfheal, patrol);
         });
 }
 
@@ -140,11 +173,11 @@ static void add_patrol_flee_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    int patrol = sm.addState(create_patrol_state(3.f));
-    int fleeFromEnemy = sm.addState(create_flee_from_enemy_state());
+    auto patrol = sm.addState(State::make<PatrolState>(3.f));
+    auto fleeFromEnemy = sm.addState(State::make<FleeFromEnemyState>());
 
-    sm.addTransition(create_enemy_available_transition(3.f), patrol, fleeFromEnemy);
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), fleeFromEnemy, patrol);
+    sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, fleeFromEnemy);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), fleeFromEnemy, patrol);
   });
 }
 
@@ -152,7 +185,7 @@ static void add_attack_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    sm.addState(create_move_to_enemy_state());
+    sm.addState(State::make<MoveToEnemyState>());
   });
 }
 
@@ -307,10 +340,10 @@ void init_roguelike(flecs::world &ecs)
   //add_attack_sm(create_monster(ecs, -5, 5, Colors::BLUE));
   
   add_berserker_sm(create_monster(ecs, 3, 3, Colors::SWAMP));
-  add_selfhealing_sm(create_monster(ecs, 4, 4, Colors::TURQUOISE));
+  add_selfhealing_sm(create_monster(ecs, 4, 4, Colors::PINK));
 
   create_player(ecs, 0, 0);
-  add_crafter_sm(create_monster(ecs, 4, 4, Colors::TURQUOISE));
+  add_crafter_sm(create_monster(ecs, 5, 5, Colors::TURQUOISE));
 
   //create_powerup(ecs, 7, 7, 10.f);
   //create_powerup(ecs, 10, -6, 10.f);

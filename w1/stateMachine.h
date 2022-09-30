@@ -1,23 +1,10 @@
 #pragma once
+#include "States.h"
+#include "StateTransitions.h"
+
 #include <vector>
 #include <flecs.h>
 #include <memory>
-
-class State
-{
-public:
-	virtual ~State() = default;
-	virtual void enter() const = 0;
-	virtual void exit() const = 0;
-	virtual void act(float dt, flecs::world &ecs, flecs::entity entity) = 0;
-};
-
-class StateTransition
-{
-public:
-  virtual ~StateTransition() {}
-  virtual bool isAvailable(flecs::world &ecs, flecs::entity entity) const = 0;
-};
 
 class StateMachine
 {
@@ -36,13 +23,13 @@ public:
 
   void act(float dt, flecs::world &ecs, flecs::entity entity);
 
-  int addState(std::unique_ptr<State> st);
-  void addTransition(std::unique_ptr<StateTransition> trans, int from, int to);
+  size_t addState(std::unique_ptr<State> st);
+  void addTransition(std::unique_ptr<StateTransition> trans, size_t from, size_t to);
 
 private:
-	int curStateIdx = 0;
+	size_t curStateIdx = 0;
 	std::vector<std::unique_ptr<State>> states;
-	std::vector<std::vector<std::pair<std::unique_ptr<StateTransition>, int>>> transitions{};
+	std::vector<std::vector<std::pair<std::unique_ptr<StateTransition>, size_t>>> transitions{};
 };
 
 class StateMachineState : public State

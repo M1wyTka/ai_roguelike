@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <debugdraw/debugdraw.h>
 
-constexpr uint32_t GridWidth = 20;
+constexpr uint32_t GridWidth = 40;
 constexpr uint32_t GridHeight = GridWidth;
 constexpr float QuadSize = 0.9f;
 
