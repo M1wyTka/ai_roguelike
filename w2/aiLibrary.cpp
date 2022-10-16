@@ -5,6 +5,7 @@
 #include "math.h"
 #include "aiUtils.h"
 
+
 class AttackEnemyState : public State
 {
 public:
@@ -57,8 +58,9 @@ public:
         a.action = move_towards(pos, ppos); // do a recovery walk
       else
       {
-        // do a random walk
-        a.action = GetRandomValue(EA_MOVE_START, EA_MOVE_END - 1);
+          constexpr auto begin = to_underlying(Actions::MOVE_START);
+          constexpr auto end = to_underlying(Actions::MOVE_END);
+          a.action = Actions(begin + (std::rand() % (end - begin)));
       }
     });
   }
@@ -150,56 +152,3 @@ public:
     return lhs->isAvailable(ecs, entity) && rhs->isAvailable(ecs, entity);
   }
 };
-
-
-// states
-State *create_attack_enemy_state()
-{
-  return new AttackEnemyState();
-}
-State *create_move_to_enemy_state()
-{
-  return new MoveToEnemyState();
-}
-
-State *create_flee_from_enemy_state()
-{
-  return new FleeFromEnemyState();
-}
-
-
-State *create_patrol_state(float patrol_dist)
-{
-  return new PatrolState(patrol_dist);
-}
-
-State *create_nop_state()
-{
-  return new NopState();
-}
-
-// transitions
-StateTransition *create_enemy_available_transition(float dist)
-{
-  return new EnemyAvailableTransition(dist);
-}
-
-StateTransition *create_enemy_reachable_transition()
-{
-  return new EnemyReachableTransition();
-}
-
-StateTransition *create_hitpoints_less_than_transition(float thres)
-{
-  return new HitpointsLessThanTransition(thres);
-}
-
-StateTransition *create_negate_transition(StateTransition *in)
-{
-  return new NegateTransition(in);
-}
-StateTransition *create_and_transition(StateTransition *lhs, StateTransition *rhs)
-{
-  return new AndTransition(lhs, rhs);
-}
-

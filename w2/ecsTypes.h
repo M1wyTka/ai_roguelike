@@ -1,5 +1,7 @@
 #pragma once
 
+#include <flecs.h>
+
 struct Position;
 struct MovePos;
 
@@ -51,22 +53,25 @@ struct Hitpoints
   float hitpoints = 10.f;
 };
 
-enum Actions
+enum class Actions : uint32_t
 {
-  EA_NOP = 0,
-  EA_MOVE_START,
-  EA_MOVE_LEFT = EA_MOVE_START,
-  EA_MOVE_RIGHT,
-  EA_MOVE_DOWN,
-  EA_MOVE_UP,
-  EA_MOVE_END,
-  EA_ATTACK = EA_MOVE_END,
-  EA_NUM
+	NOP = 0,
+	JUMP,
+	ACT,
+	MEH,
+	MOVE_START,
+	MOVE_LEFT = MOVE_START,
+	MOVE_RIGHT,
+	MOVE_DOWN,
+	MOVE_UP,
+	MOVE_END,
+	ATTACK = MOVE_END,
+	NUM
 };
 
 struct Action
 {
-  int action = 0;
+	Actions action = Actions::NOP;
 };
 
 struct NumActions
@@ -96,6 +101,11 @@ struct PlayerInput
   bool right = false;
   bool up = false;
   bool down = false;
+
+  bool jump = false;
+  bool act = false;
+  bool attack = false;
+  bool meh = false;
 };
 
 struct Symbol
@@ -105,9 +115,21 @@ struct Symbol
 
 struct IsPlayer {};
 
+struct MayPickUp {};
+
 struct Team
 {
   int team = 0;
+};
+
+struct CurrentWaypoint
+{
+	flecs::entity ent;
+};
+
+struct NextWaypoint
+{
+	flecs::entity ent;
 };
 
 struct TextureSource {};

@@ -1,18 +1,27 @@
 #pragma once
 
-#include <flecs.h>
 #include <memory>
-#include "blackboard.h"
+#include <cstdint>
 
-enum BehResult
+#include <flecs.h>
+
+#include "blackboard.h"
+#include "EnumUtility.h"
+
+enum class BehResult : uint32_t
 {
-  BEH_SUCCESS,
-  BEH_FAIL,
-  BEH_RUNNING
+  FAIL = 0,
+  SUCCESS,
+  RUNNING
 };
 
 struct BehNode
 {
+    template<std::derived_from<BehNode> DerivedBehNode, typename ... Args>
+    static std::unique_ptr<BehNode> make(Args&&... args)
+    {
+        return std::make_unique<DerivedBehNode>(std::forward<Args>(args)...);
+    }
   virtual ~BehNode() {}
   virtual BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) = 0;
 };
@@ -23,6 +32,8 @@ struct BehaviourTree
 
   BehaviourTree() = default;
   BehaviourTree(BehNode *r) : root(r) {}
+  BehaviourTree(std::unique_ptr<BehNode>&& r) : root(std::move(r)) {}
+
 
   BehaviourTree(const BehaviourTree &bt) = delete;
   BehaviourTree(BehaviourTree &&bt) = default;
