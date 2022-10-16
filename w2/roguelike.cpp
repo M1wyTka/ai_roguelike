@@ -249,7 +249,7 @@ void init_roguelike(flecs::world &ecs)
 
   create_guard_mob(
       create_monster(ecs, 3, 3, Color{ 0, 0, 255, 255 }, "swordsman_tex")
-      .set(CurrentWaypoint{ generate_waypoints(ecs, {{5,5},{5,-5},{-5,-5},{-5,5}}) })
+      .set(CurrentWaypoint{ generate_waypoints(ecs, {{6,6},{6,-6},{-6,-6},{-6,6}}) })
   );
 
   create_player(ecs, 0, 0, "swordsman_tex");
