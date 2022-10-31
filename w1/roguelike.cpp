@@ -1,42 +1,183 @@
-#include "roguelike.h"
-#include "ecsTypes.h"
 #include <debugdraw/debugdraw.h>
-#include "stateMachine.h"
-#include "aiLibrary.h"
-#include "app.h"
-
 //for scancodes
 #include <GLFW/glfw3.h>
+
+#include "app.h"
+#include "ecsTypes.h"
+#include "roguelike.h"
+#include "stateMachine.h"
+#include "aiLibrary.h"
+#include "GameSettings.h"
+#include "FunUtilities.h"
+
 
 static void add_patrol_attack_flee_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    int patrol = sm.addState(create_patrol_state(3.f));
-    int moveToEnemy = sm.addState(create_move_to_enemy_state());
-    int fleeFromEnemy = sm.addState(create_flee_from_enemy_state());
+    auto patrol        = sm.addState(State::make<PatrolState>(3.f));
+    auto moveToEnemy   = sm.addState(State::make<MoveToEnemyState>());
+    auto fleeFromEnemy = sm.addState(State::make<FleeFromEnemyState>());
 
-    sm.addTransition(create_enemy_available_transition(3.f), patrol, moveToEnemy);
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), moveToEnemy, patrol);
+    sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, moveToEnemy);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), moveToEnemy, patrol);
 
-    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(5.f)),
-                     moveToEnemy, fleeFromEnemy);
-    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(3.f)),
-                     patrol, fleeFromEnemy);
+    sm.addTransition(
+        create_and_transition(
+            StateTransition::make<HitpointsLessThanTransition>(60.f),
+            StateTransition::make<EnemyAvailableTransition>(5.f)
+        ),
+        moveToEnemy, fleeFromEnemy);
+    sm.addTransition(
+        create_and_transition(
+            StateTransition::make<HitpointsLessThanTransition>(60.f),
+            StateTransition::make<EnemyAvailableTransition>(3.f)
+        ),
+        patrol, fleeFromEnemy);
 
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(7.f)), fleeFromEnemy, patrol);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(7.f)), fleeFromEnemy, patrol);
   });
+}
+
+static void add_berserker_sm(flecs::entity entity) 
+{
+    entity.get([](StateMachine& sm)
+    {
+        auto patrol      = sm.addState(State::make<PatrolState>(3.f));
+        auto moveToEnemy = sm.addState(State::make<MoveToEnemyState>());
+
+        sm.addTransition(
+            create_or_transition(
+                StateTransition::make<EnemyAvailableTransition>(3.f),
+                StateTransition::make<HitpointsLessThanTransition>(60.f)
+            ),
+            patrol, moveToEnemy);
+
+        sm.addTransition(
+            create_negate_transition(
+                        create_or_transition(
+                            StateTransition::make<EnemyAvailableTransition>(5.f),
+                            StateTransition::make<HitpointsLessThanTransition>(60.f)
+                        )
+            ),
+            moveToEnemy, patrol);
+    });
+}
+
+std::unique_ptr<State> create_crafter_main() 
+{
+    auto main_sm = std::make_unique<StateMachine>();
+    
+    auto buy   = main_sm->addState(State::make<MarketState>());
+    auto sell  = main_sm->addState(State::make<MarketState>());
+    auto craft = main_sm->addState(State::make<CraftState>());
+
+    auto go_buy   = main_sm->addState(State::make<MoveToTargetState<Market>>());
+    auto go_sell  = main_sm->addState(State::make<MoveToTargetState<Market>>());
+    auto go_craft = main_sm->addState(State::make<MoveToTargetState<Craft>>());
+
+
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), buy, go_craft);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_craft, craft);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), craft, go_sell);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_sell, sell);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), sell, go_craft);
+    main_sm->addTransition(StateTransition::make<MehPressedTransition>(), sell, go_buy);
+    main_sm->addTransition(StateTransition::make<ActPressedTransition>(), go_buy, buy);
+
+    return State::make<StateMachineState>(std::move(main_sm));
+}
+
+std::unique_ptr<State> create_crafter_eat()
+{
+    auto eat_sm = std::make_unique<StateMachine>();
+
+    auto go_to_eat = eat_sm->addState(State::make<MoveToTargetState<Eat>>());
+    auto eat       = eat_sm->addState(State::make<EatState>());
+
+    eat_sm->addTransition(StateTransition::make<HitpointsLessThanTransition>(100.f), go_to_eat, eat);
+
+    return State::make<StateMachineState>(std::move(eat_sm));
+}
+
+std::unique_ptr<State> create_crafter_sleep()
+{
+    auto sleep_sm = std::make_unique<StateMachine>();
+
+    auto go_to_sleep = sleep_sm->addState(State::make<MoveToTargetState<Sleep>>());
+    auto sleep       = sleep_sm->addState(State::make<SleepState>());
+
+    sleep_sm->addTransition(StateTransition::make<HitpointsLessThanTransition>(50.f), go_to_sleep, sleep);
+
+    return State::make<StateMachineState>(std::move(sleep_sm));
+}
+
+static void add_crafter_sm(flecs::entity entity)
+{
+    entity.get([](StateMachine& sm)
+        {
+            auto patrol   = sm.addState(State::make<PatrolState>(3.f));
+            auto main_sm  = sm.addState(create_crafter_main());
+            auto sleep_sm = sm.addState(create_crafter_sleep());
+            auto eat_sm   = sm.addState(create_crafter_eat());
+            
+            sm.addTransition(StateTransition::make<MehPressedTransition>(), main_sm, sleep_sm);
+            sm.addTransition(
+                create_and_transition(
+                    StateTransition::make<EnemyAvailableTransition>(2.f),
+                    StateTransition::make<JumpPressedTransition>()
+                )
+                , sleep_sm, main_sm);
+            
+            sm.addTransition(StateTransition::make<JumpPressedTransition>(), main_sm, eat_sm);
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(2.f), eat_sm, main_sm);
+            sm.addTransition(
+                create_and_transition(
+                    StateTransition::make<JumpPressedTransition>(),
+                    StateTransition::make<ActPressedTransition>()
+                )
+                , sleep_sm, eat_sm);
+            
+            sm.addTransition(
+                create_and_transition(
+                    StateTransition::make<JumpPressedTransition>(),
+                    StateTransition::make<ActPressedTransition>()),
+                sleep_sm, eat_sm);
+
+
+            sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), main_sm, patrol);
+            
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, main_sm);
+        });
+}
+
+static void add_selfhealing_sm(flecs::entity entity)
+{
+    entity.get([](StateMachine& sm)
+        {
+            auto patrol      = sm.addState(State::make<PatrolState>(3.f));
+            auto moveToEnemy = sm.addState(State::make<MoveToEnemyState>());
+            auto selfheal    = sm.addState(State::make<SelfhealState>(5.f));
+
+            sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, moveToEnemy);
+            sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), moveToEnemy, patrol);
+
+            sm.addTransition(StateTransition::make<HitpointsLessThanTransition>(60.0f), moveToEnemy, selfheal);
+            sm.addTransition(StateTransition::make<HitpointsLessThanTransition>(60.0f), patrol, selfheal);
+
+            sm.addTransition(create_negate_transition(StateTransition::make<HitpointsLessThanTransition>(60.0f)), selfheal, patrol);
+        });
 }
 
 static void add_patrol_flee_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    int patrol = sm.addState(create_patrol_state(3.f));
-    int fleeFromEnemy = sm.addState(create_flee_from_enemy_state());
+    auto patrol = sm.addState(State::make<PatrolState>(3.f));
+    auto fleeFromEnemy = sm.addState(State::make<FleeFromEnemyState>());
 
-    sm.addTransition(create_enemy_available_transition(3.f), patrol, fleeFromEnemy);
-    sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), fleeFromEnemy, patrol);
+    sm.addTransition(StateTransition::make<EnemyAvailableTransition>(3.f), patrol, fleeFromEnemy);
+    sm.addTransition(create_negate_transition(StateTransition::make<EnemyAvailableTransition>(5.f)), fleeFromEnemy, patrol);
   });
 }
 
@@ -44,18 +185,18 @@ static void add_attack_sm(flecs::entity entity)
 {
   entity.get([](StateMachine &sm)
   {
-    sm.addState(create_move_to_enemy_state());
+    sm.addState(State::make<MoveToEnemyState>());
   });
 }
 
-static flecs::entity create_monster(flecs::world &ecs, int x, int y, uint32_t color)
+static flecs::entity create_monster(flecs::world &ecs, int x, int y, Colors color)
 {
   return ecs.entity()
     .set(Position{x, y})
     .set(MovePos{x, y})
     .set(PatrolPos{x, y})
     .set(Hitpoints{100.f})
-    .set(Action{EA_NOP})
+    .set(Action{Actions::NOP})
     .set(Color{color})
     .set(StateMachine{})
     .set(Team{1})
@@ -69,8 +210,8 @@ static void create_player(flecs::world &ecs, int x, int y)
     .set(Position{x, y})
     .set(MovePos{x, y})
     .set(Hitpoints{100.f})
-    .set(Color{0xffeeeeee})
-    .set(Action{EA_NOP})
+    .set(Color{Colors::WHITE})
+    .set(Action{Actions::NOP})
     .add<IsPlayer>()
     .set(Team{0})
     .set(PlayerInput{})
@@ -83,7 +224,7 @@ static void create_heal(flecs::world &ecs, int x, int y, float amount)
   ecs.entity()
     .set(Position{x, y})
     .set(HealAmount{amount})
-    .set(Color{0xff4444ff});
+    .set(Color{Colors::GREEN});
 }
 
 static void create_powerup(flecs::world &ecs, int x, int y, float amount)
@@ -91,42 +232,99 @@ static void create_powerup(flecs::world &ecs, int x, int y, float amount)
   ecs.entity()
     .set(Position{x, y})
     .set(PowerupAmount{amount})
-    .set(Color{0xff00ffff});
+    .set(Color{Colors::RED});
+}
+
+static void create_craft_spot(flecs::world& ecs, int x, int y) 
+{
+    ecs.entity()
+        .set(Position{ x, y })
+        .add<Craft>()
+        .set(Color{ Colors::INDIGO });
+}
+
+static void create_market_spot(flecs::world& ecs, int x, int y)
+{
+    ecs.entity()
+        .set(Position{ x, y })
+        .add<Market>()
+        .set(Color{ Colors::BLACK });
+}
+
+static void create_eat_spot(flecs::world& ecs, int x, int y) 
+{
+    ecs.entity()
+        .set(Position{ x, y })
+        .add<Eat>()
+        .set(Color{ Colors::PURPLE });
+}
+
+static void create_sleep_spot(flecs::world& ecs, int x, int y)
+{
+    ecs.entity()
+        .set(Position{ x, y })
+        .add<Sleep>()
+        .set(Color{ Colors::ORANGE });
+}
+
+
+static void register_input_system(flecs::world& ecs) 
+{
+    ecs.system<PlayerInput, Action, const IsPlayer>()
+        .each([&](PlayerInput& inp, Action& a, const IsPlayer)
+            {
+                bool left = app_keypressed(GLFW_KEY_LEFT);
+                bool right = app_keypressed(GLFW_KEY_RIGHT);
+                bool up = app_keypressed(GLFW_KEY_UP);
+                bool down = app_keypressed(GLFW_KEY_DOWN);
+                bool jump = app_keypressed(GLFW_KEY_F);
+                bool act = app_keypressed(GLFW_KEY_Q);
+                bool meh = app_keypressed(GLFW_KEY_E);
+
+                if (left && !inp.left)
+                    a.action = Actions::MOVE_LEFT;
+                if (right && !inp.right)
+                    a.action = Actions::MOVE_RIGHT;
+                if (up && !inp.up)
+                    a.action = Actions::MOVE_UP;
+                if (down && !inp.down)
+                    a.action = Actions::MOVE_DOWN;
+                if (jump && !inp.jump)
+                    a.action = Actions::JUMP;
+                if (act && !inp.act)
+                    a.action = Actions::ACT;
+                if (meh && !inp.meh)
+                    a.action = Actions::MEH;
+                                  
+                inp.left = left;
+                inp.right = right;
+                inp.up = up;
+                inp.down = down;
+                inp.jump = jump;
+                inp.act = act;
+                inp.meh = meh;
+            });
+}
+
+static void register_display_system(flecs::world& ecs)
+{
+    ecs.system<const Position, const Color>()
+        .each([&](const Position& pos, const Color color)
+            {
+                DebugDrawEncoder dde;
+                dde.begin(0);
+                dde.push();
+                dde.setColor(to_underlying(color.color));
+                dde.drawQuad(bx::Vec3(0, 0, 1), bx::Vec3(pos.x* QuadSize, pos.y*QuadSize, 0.f), QuadSize);
+                dde.pop();
+                dde.end();
+            });
 }
 
 static void register_roguelike_systems(flecs::world &ecs)
 {
-  ecs.system<PlayerInput, Action, const IsPlayer>()
-    .each([&](PlayerInput &inp, Action &a, const IsPlayer)
-    {
-      bool left = app_keypressed(GLFW_KEY_LEFT);
-      bool right = app_keypressed(GLFW_KEY_RIGHT);
-      bool up = app_keypressed(GLFW_KEY_UP);
-      bool down = app_keypressed(GLFW_KEY_DOWN);
-      if (left && !inp.left)
-        a.action = EA_MOVE_LEFT;
-      if (right && !inp.right)
-        a.action = EA_MOVE_RIGHT;
-      if (up && !inp.up)
-        a.action = EA_MOVE_UP;
-      if (down && !inp.down)
-        a.action = EA_MOVE_DOWN;
-      inp.left = left;
-      inp.right = right;
-      inp.up = up;
-      inp.down = down;
-    });
-  ecs.system<const Position, const Color>()
-    .each([&](const Position &pos, const Color color)
-    {
-      DebugDrawEncoder dde;
-      dde.begin(0);
-      dde.push();
-        dde.setColor(color.color);
-        dde.drawQuad(bx::Vec3(0, 0, 1), bx::Vec3(pos.x, pos.y, 0.f), 1.f);
-      dde.pop();
-      dde.end();
-    });
+    register_input_system(ecs);
+    register_display_system(ecs);
 }
 
 
@@ -134,19 +332,30 @@ void init_roguelike(flecs::world &ecs)
 {
   register_roguelike_systems(ecs);
 
-  add_patrol_attack_flee_sm(create_monster(ecs, 5, 5, 0xffee00ee));
-  add_patrol_attack_flee_sm(create_monster(ecs, 10, -5, 0xffee00ee));
-  add_patrol_flee_sm(create_monster(ecs, -5, -5, 0xff111111));
-  add_attack_sm(create_monster(ecs, -5, 5, 0xff00ff00));
+  // TODO: Parse json for initial position
+
+  //add_patrol_attack_flee_sm(create_monster(ecs, 5, 5, Colors::YELLOW));
+  //add_patrol_attack_flee_sm(create_monster(ecs, 10, -5, Colors::YELLOW));
+  //add_patrol_flee_sm(create_monster(ecs, -5, -5, Colors::PINK));
+  //add_attack_sm(create_monster(ecs, -5, 5, Colors::BLUE));
+  
+  add_berserker_sm(create_monster(ecs, 3, 3, Colors::SWAMP));
+  add_selfhealing_sm(create_monster(ecs, 4, 4, Colors::PINK));
 
   create_player(ecs, 0, 0);
+  add_crafter_sm(create_monster(ecs, 5, 5, Colors::TURQUOISE));
 
-  create_powerup(ecs, 7, 7, 10.f);
-  create_powerup(ecs, 10, -6, 10.f);
-  create_powerup(ecs, 10, -4, 10.f);
-
-  create_heal(ecs, -5, -5, 50.f);
-  create_heal(ecs, -5, 5, 50.f);
+  //create_powerup(ecs, 7, 7, 10.f);
+  //create_powerup(ecs, 10, -6, 10.f);
+  //create_powerup(ecs, 10, -4, 10.f);
+  //
+  //create_heal(ecs, -5, -5, 50.f);
+  //create_heal(ecs, -5, 5, 50.f);
+  //
+  create_eat_spot(ecs, -9, 9);
+  create_sleep_spot(ecs, 9, 9);
+  create_craft_spot(ecs, 9, -9);
+  create_market_spot(ecs, -9, -9);
 }
 
 static bool is_player_acted(flecs::world &ecs)
@@ -155,7 +364,7 @@ static bool is_player_acted(flecs::world &ecs)
   bool playerActed = false;
   processPlayer.each([&](const IsPlayer, const Action &a)
   {
-    playerActed = a.action != EA_NOP;
+    playerActed = a.action != Actions::NOP;
   });
   return playerActed;
 }
@@ -172,15 +381,15 @@ static bool upd_player_actions_count(flecs::world &ecs)
   return actionsReached;
 }
 
-static Position move_pos(Position pos, int action)
+static Position move_pos(Position pos, Actions action)
 {
-  if (action == EA_MOVE_LEFT)
+  if (action == Actions::MOVE_LEFT)
     pos.x--;
-  else if (action == EA_MOVE_RIGHT)
+  else if (action == Actions::MOVE_RIGHT)
     pos.x++;
-  else if (action == EA_MOVE_UP)
+  else if (action == Actions::MOVE_UP)
     pos.y++;
-  else if (action == EA_MOVE_DOWN)
+  else if (action == Actions::MOVE_DOWN)
     pos.y--;
   return pos;
 }
@@ -206,7 +415,7 @@ static void process_actions(flecs::world &ecs)
         }
       });
       if (blocked)
-        a.action = EA_NOP;
+        a.action = Actions::NOP;
       else
         mpos = nextPos;
     });
@@ -214,7 +423,7 @@ static void process_actions(flecs::world &ecs)
     processActions.each([&](flecs::entity entity, Action &a, Position &pos, MovePos &mpos, const MeleeDamage &, const Team&)
     {
       pos = mpos;
-      a.action = EA_NOP;
+      a.action = Actions::NOP;
     });
   });
 
