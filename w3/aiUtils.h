@@ -5,21 +5,21 @@
 #include "math.h"
 
 template<typename T, typename U>
-inline int move_towards(const T &from, const U &to)
+inline Actions move_towards(const T &from, const U &to)
 {
   int deltaX = to.x - from.x;
   int deltaY = to.y - from.y;
   if (abs(deltaX) > abs(deltaY))
-    return deltaX > 0 ? EA_MOVE_RIGHT : EA_MOVE_LEFT;
-  return deltaY < 0 ? EA_MOVE_UP : EA_MOVE_DOWN;
+    return deltaX > 0 ? Actions::MOVE_RIGHT : Actions::MOVE_LEFT;
+  return deltaY < 0 ? Actions::MOVE_UP : Actions::MOVE_DOWN;
 }
 
-inline int inverse_move(int move)
+inline Actions inverse_move(Actions move)
 {
-  return move == EA_MOVE_LEFT ? EA_MOVE_RIGHT :
-         move == EA_MOVE_RIGHT ? EA_MOVE_LEFT :
-         move == EA_MOVE_UP ? EA_MOVE_DOWN :
-         move == EA_MOVE_DOWN ? EA_MOVE_UP : move;
+  return move == Actions::MOVE_LEFT ? Actions::MOVE_RIGHT :
+         move == Actions::MOVE_RIGHT ? Actions::MOVE_LEFT :
+         move == Actions::MOVE_UP ? Actions::MOVE_DOWN :
+         move == Actions::MOVE_DOWN ? Actions::MOVE_UP : move;
 }
 
 template<typename Callable>

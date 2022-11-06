@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 
 project(ai)
 
@@ -22,6 +22,8 @@ include(cmake/Sanitizers.cmake)
 enable_sanitizers(project_options)
 
 add_subdirectory(3rdParty)
+
+set(BUILD_SHARED_LIBS off)
 
 if (hw1)
     add_subdirectory(w1)

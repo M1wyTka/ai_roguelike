@@ -57,3 +57,7 @@ CMakeCache.txt
 *.cmake
 compile_commands.json
 build/*
+.vs/*
+.idea/*
+out/*
+w3/.vs/*

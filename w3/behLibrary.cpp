@@ -4,6 +4,10 @@
 #include "math.h"
 #include "raylib.h"
 #include "blackboard.h"
+#include <algorithm>
+#include <iostream>
+#include <format>
+#include <random>
 
 struct CompoundNode : public BehNode
 {
@@ -30,10 +34,10 @@ struct Sequence : public CompoundNode
     for (BehNode *node : nodes)
     {
       BehResult res = node->update(ecs, entity, bb);
-      if (res != BEH_SUCCESS)
+      if (res != BehResult::SUCCESS)
         return res;
     }
-    return BEH_SUCCESS;
+    return BehResult::SUCCESS;
   }
 };
 
@@ -44,12 +48,68 @@ struct Selector : public CompoundNode
     for (BehNode *node : nodes)
     {
       BehResult res = node->update(ecs, entity, bb);
-      if (res != BEH_FAIL)
+      if (res != BehResult::FAIL)
         return res;
     }
-    return BEH_FAIL;
+    return BehResult::FAIL;
   }
 };
+
+
+struct WeightedUtilitySelector : public BehNode
+{
+    WeightedUtilitySelector(std::vector<std::pair<BehNode*, utility_function>>&& nodes)
+        : utilityNodes(std::move(nodes)) {
+        heats.resize(utilityNodes.size());
+    };
+
+    std::vector<std::pair<BehNode*, utility_function>> utilityNodes;
+    std::vector<float> heats;
+    static constexpr float max_heat = 200.f;
+    static constexpr float heat_step = 25.f;
+    size_t prev_heat = -1;
+
+    BehResult update(flecs::world& ecs, flecs::entity entity, Blackboard& bb) override
+    {
+        std::vector<float> sub_scores;
+        
+        for(size_t i = 0; i < utilityNodes.size(); i++)
+        {
+            float total_val = (utilityNodes[i].second(bb) + heats[i]);
+            std::cout << std::format("sub_score = {0} ; heat = {1}\n", total_val, heats[i]);
+
+            sub_scores.emplace_back(total_val);
+        }
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::discrete_distribution<> d(sub_scores.begin(), sub_scores.end());
+        
+        for (size_t rand_ind = d(gen);; rand_ind = d(gen))
+        {
+            std::cout << std::format("Rand ind = {0}\n", rand_ind);
+            auto res = utilityNodes[rand_ind].first->update(ecs, entity, bb);
+            if (res == BehResult::FAIL)
+            {
+                std::cout << "Failed\n";
+                continue;
+            }    
+
+            if (prev_heat != rand_ind)
+            {
+                if (prev_heat != -1)
+                    heats[prev_heat] = 0.f;
+                prev_heat = rand_ind;
+                heats[rand_ind] = max_heat;
+            }
+            else
+                heats[prev_heat] -= heat_step;
+            return res;
+        }
+        return BehResult::FAIL;
+    }
+};
+
 
 struct UtilitySelector : public BehNode
 {
@@ -57,24 +117,25 @@ struct UtilitySelector : public BehNode
 
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
-    std::vector<std::pair<float, size_t>> utilityScores;
-    for (size_t i = 0; i < utilityNodes.size(); ++i)
+    std::vector<std::pair<float, BehNode*>> utilityScores;
+    for (const auto&[node, func] : utilityNodes)
     {
-      const float utilityScore = utilityNodes[i].second(bb);
-      utilityScores.push_back(std::make_pair(utilityScore, i));
+        utilityScores.emplace_back(func(bb), node);
     }
     std::sort(utilityScores.begin(), utilityScores.end(), [](auto &lhs, auto &rhs)
     {
       return lhs.first > rhs.first;
     });
-    for (const std::pair<float, size_t> &node : utilityScores)
+    for (const auto& [result, node] : utilityScores)
     {
-      size_t nodeIdx = node.second;
-      BehResult res = utilityNodes[nodeIdx].first->update(ecs, entity, bb);
-      if (res != BEH_FAIL)
-        return res;
+        std::cout << std::format("Executing {0}\n", typeid(*node).name());
+      BehResult res = node->update(ecs, entity, bb);
+      if (res != BehResult::FAIL)
+      {
+          return res;
+      } 
     }
-    return BEH_FAIL;
+    return BehResult::FAIL;
   }
 };
 
@@ -88,13 +149,13 @@ struct MoveToEntity : public BehNode
 
   BehResult update(flecs::world &, flecs::entity entity, Blackboard &bb) override
   {
-    BehResult res = BEH_RUNNING;
+    BehResult res = BehResult::RUNNING;
     entity.set([&](Action &a, const Position &pos)
     {
       flecs::entity targetEntity = bb.get<flecs::entity>(entityBb);
       if (!targetEntity.is_alive())
       {
-        res = BEH_FAIL;
+        res = BehResult::FAIL;
         return;
       }
       targetEntity.get([&](const Position &target_pos)
@@ -102,10 +163,10 @@ struct MoveToEntity : public BehNode
         if (pos != target_pos)
         {
           a.action = move_towards(pos, target_pos);
-          res = BEH_RUNNING;
+          res = BehResult::RUNNING;
         }
         else
-          res = BEH_SUCCESS;
+          res = BehResult::SUCCESS;
       });
     });
     return res;
@@ -119,10 +180,10 @@ struct IsLowHp : public BehNode
 
   BehResult update(flecs::world &, flecs::entity entity, Blackboard &) override
   {
-    BehResult res = BEH_SUCCESS;
+    BehResult res = BehResult::SUCCESS;
     entity.get([&](const Hitpoints &hp)
     {
-      res = hp.hitpoints < threshold ? BEH_SUCCESS : BEH_FAIL;
+      res = hp.hitpoints < threshold ? BehResult::SUCCESS : BehResult::FAIL;
     });
     return res;
   }
@@ -138,7 +199,8 @@ struct FindEnemy : public BehNode
   }
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
-    BehResult res = BEH_FAIL;
+    std::cout << std::format("Looking for enemy\n");
+    BehResult res = BehResult::FAIL;
     static auto enemiesQuery = ecs.query<const Position, const Team>();
     entity.set([&](const Position &pos, const Team &t)
     {
@@ -160,7 +222,7 @@ struct FindEnemy : public BehNode
       if (ecs.is_valid(closestEnemy) && closestDist <= distance)
       {
         bb.set<flecs::entity>(entityBb, closestEnemy);
-        res = BEH_SUCCESS;
+        res = BehResult::SUCCESS;
       }
     });
     return res;
@@ -177,13 +239,13 @@ struct Flee : public BehNode
 
   BehResult update(flecs::world &, flecs::entity entity, Blackboard &bb) override
   {
-    BehResult res = BEH_RUNNING;
+    BehResult res = BehResult::RUNNING;
     entity.set([&](Action &a, const Position &pos)
     {
       flecs::entity targetEntity = bb.get<flecs::entity>(entityBb);
       if (!targetEntity.is_alive())
       {
-        res = BEH_FAIL;
+        res = BehResult::FAIL;
         return;
       }
       targetEntity.get([&](const Position &target_pos)
@@ -194,6 +256,12 @@ struct Flee : public BehNode
     return res;
   }
 };
+
+template<typename E>
+constexpr auto to_underlying(E e) -> std::underlying_type<E>::type
+{
+    return static_cast<std::underlying_type<E>::type>(e);
+}
 
 struct Patrol : public BehNode
 {
@@ -211,14 +279,19 @@ struct Patrol : public BehNode
 
   BehResult update(flecs::world &, flecs::entity entity, Blackboard &bb) override
   {
-    BehResult res = BEH_RUNNING;
+    BehResult res = BehResult::RUNNING;
     entity.set([&](Action &a, const Position &pos)
     {
+            std::cout << "Patroling\n";
       Position patrolPos = bb.get<Position>(pposBb);
       if (dist(pos, patrolPos) > patrolDist)
         a.action = move_towards(pos, patrolPos);
-      else
-        a.action = GetRandomValue(EA_MOVE_START, EA_MOVE_END - 1); // do a random walk
+      else 
+      {
+          constexpr auto begin = to_underlying(Actions::MOVE_START);
+          constexpr auto end = to_underlying(Actions::MOVE_END);
+          a.action = Actions(begin + (std::rand() % (end - begin)));
+      }
     });
     return res;
   }
@@ -231,13 +304,13 @@ struct PatchUp : public BehNode
 
   BehResult update(flecs::world &, flecs::entity entity, Blackboard &) override
   {
-    BehResult res = BEH_SUCCESS;
+    BehResult res = BehResult::SUCCESS;
     entity.set([&](Action &a, Hitpoints &hp)
     {
       if (hp.hitpoints >= hpThreshold)
         return;
-      res = BEH_RUNNING;
-      a.action = EA_HEAL_SELF;
+      res = BehResult::RUNNING;
+      a.action = Actions::HEAL_SELF;
     });
     return res;
   }
@@ -261,11 +334,17 @@ BehNode *selector(const std::vector<BehNode*> &nodes)
   return sel;
 }
 
-BehNode *utility_selector(const std::vector<std::pair<BehNode*, utility_function>> &nodes)
+BehNode *utility_selector(std::vector<std::pair<BehNode*, utility_function>>&& nodes)
 {
   UtilitySelector *usel = new UtilitySelector;
   usel->utilityNodes = std::move(nodes);
   return usel;
+}
+
+BehNode* weighted_selector(std::vector<std::pair<BehNode*, utility_function>>&& nodes) 
+{
+    WeightedUtilitySelector* wusel = new WeightedUtilitySelector(std::move(nodes));
+    return wusel;
 }
 
 BehNode *move_to_entity(flecs::entity entity, const char *bb_name)

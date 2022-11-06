@@ -42,6 +42,12 @@ public:
   }
 };
 
+template<typename E>
+constexpr auto to_underlying(E e) -> std::underlying_type<E>::type
+{
+    return static_cast<std::underlying_type<E>::type>(e);
+}
+
 class PatrolState : public State
 {
   float patrolDist;
@@ -57,8 +63,9 @@ public:
         a.action = move_towards(pos, ppos); // do a recovery walk
       else
       {
-        // do a random walk
-        a.action = GetRandomValue(EA_MOVE_START, EA_MOVE_END - 1);
+          constexpr auto begin = to_underlying(Actions::MOVE_START);
+          constexpr auto end = to_underlying(Actions::MOVE_END);
+          a.action = Actions(begin + (std::rand() % (end - begin)));
       }
     });
   }

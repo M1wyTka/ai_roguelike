@@ -4,11 +4,11 @@
 #include <memory>
 #include "blackboard.h"
 
-enum BehResult
+enum class BehResult : uint32_t
 {
-  BEH_SUCCESS,
-  BEH_FAIL,
-  BEH_RUNNING
+    FAIL = 0,
+    SUCCESS,
+    RUNNING
 };
 
 struct BehNode

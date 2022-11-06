@@ -54,23 +54,26 @@ struct Hitpoints
   float hitpoints = 10.f;
 };
 
-enum Actions
+enum class Actions : uint32_t
 {
-  EA_NOP = 0,
-  EA_MOVE_START,
-  EA_MOVE_LEFT = EA_MOVE_START,
-  EA_MOVE_RIGHT,
-  EA_MOVE_DOWN,
-  EA_MOVE_UP,
-  EA_MOVE_END,
-  EA_ATTACK = EA_MOVE_END,
-  EA_HEAL_SELF,
-  EA_NUM
+	NOP = 0,
+	JUMP,
+	ACT,
+	MEH,
+	MOVE_START,
+	MOVE_LEFT = MOVE_START,
+	MOVE_RIGHT,
+	MOVE_DOWN,
+	MOVE_UP,
+	MOVE_END,
+	ATTACK = MOVE_END,
+	HEAL_SELF,
+	NUM
 };
 
 struct Action
 {
-  int action = 0;
+	Actions action = Actions::NOP;
 };
 
 struct NumActions
@@ -129,3 +132,4 @@ struct ActionLog
   size_t capacity = 5;
 };
 
+struct Base {};
