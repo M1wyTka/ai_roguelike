@@ -6,6 +6,7 @@
 #include "blackboard.h"
 #include "math.h"
 #include <iostream>
+#include <algorithm>
 
 static void create_hw3_monster_beh(flecs::entity e)
 {
@@ -28,7 +29,7 @@ static void create_hw3_monster_beh(flecs::entity e)
             {
               const float ally = bb.get<float>("alliesNum");
               const float base = bb.get<float>("baseDist");
-              return (150.f * (1 - (ally != 0.f))) + base*10.f;
+              return std::max((150.f * (1 - ally)) + base*10.f, 0.f);
             }
           },
           {
@@ -38,9 +39,9 @@ static void create_hw3_monster_beh(flecs::entity e)
             }),
             [](Blackboard& bb)
             {
-              constexpr float near = 4.f;
+              constexpr float near = 3.f;
               const float base = bb.get<float>("baseDist");
-              return 200.f*(base < near);
+              return std::max(200.f*(near - base), 0.f);
             }
           }
         });
