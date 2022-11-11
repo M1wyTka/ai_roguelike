@@ -1,41 +1,45 @@
 #pragma once
+#include "States.h"
+#include "StateTransitions.h"
+
 #include <vector>
 #include <flecs.h>
-
-class State
-{
-public:
-  virtual void enter() const = 0;
-  virtual void exit() const = 0;
-  virtual void act(float dt, flecs::world &ecs, flecs::entity entity) const = 0;
-};
-
-class StateTransition
-{
-public:
-  virtual ~StateTransition() {}
-  virtual bool isAvailable(flecs::world &ecs, flecs::entity entity) const = 0;
-};
+#include <memory>
 
 class StateMachine
 {
-  int curStateIdx = 0;
-  std::vector<State*> states;
-  std::vector<std::vector<std::pair<StateTransition*, int>>> transitions;
 public:
   StateMachine() = default;
-  StateMachine(const StateMachine &sm) = default;
+  StateMachine(const StateMachine &sm) = delete;
   StateMachine(StateMachine &&sm) = default;
 
   ~StateMachine();
 
-  StateMachine &operator=(const StateMachine &sm) = default;
-  StateMachine &operator=(StateMachine &&sm) = default;
+  StateMachine& operator=(const StateMachine &sm) = delete;
+  StateMachine& operator=(StateMachine &&sm) = default;
 
+  void enter() const {};
+  void exit() const {};
 
   void act(float dt, flecs::world &ecs, flecs::entity entity);
 
-  int addState(State *st);
-  void addTransition(StateTransition *trans, int from, int to);
+  size_t addState(std::unique_ptr<State> st);
+  void addTransition(std::unique_ptr<StateTransition> trans, size_t from, size_t to);
+
+private:
+	size_t curStateIdx = 0;
+	std::vector<std::unique_ptr<State>> states;
+	std::vector<std::vector<std::pair<std::unique_ptr<StateTransition>, size_t>>> transitions{};
 };
 
+class StateMachineState : public State
+{
+	std::unique_ptr<StateMachine> m_state_machine;
+public:
+	StateMachineState(std::unique_ptr<StateMachine>&& sm) : m_state_machine(std::move(sm)) {}
+	void enter() const override {}
+	void exit() const override {}
+	void act(float/* dt*/, flecs::world& ecs, flecs::entity entity) override {
+		m_state_machine->act(0.f, ecs, entity);
+	}
+};
