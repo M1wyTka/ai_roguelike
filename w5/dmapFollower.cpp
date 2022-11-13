@@ -5,7 +5,11 @@
 void process_dmap_followers(flecs::world &ecs)
 {
   static auto processDmapFollowers = ecs.query<const Position, Action, const DmapWeights>();
+  static auto processDmapArchers = ecs.query<const Position, Action, const DistanceDamage, const DmapWeights>();
+  static auto player = ecs.query<const IsPlayer, Hitpoints>();
+
   static auto dungeonDataQuery = ecs.query<const DungeonData>();
+
 
   auto get_dmap_at = [&](const DijkstraMapData &dmap, const DungeonData &dd, size_t x, size_t y, float mult, float pow)
   {
@@ -40,6 +44,26 @@ void process_dmap_followers(flecs::world &ecs)
           act.action = i;
         }
     });
+
+
+    processDmapArchers.each([&](const Position& pos, Action& act, const DistanceDamage& dmg, const DmapWeights& wt)
+    {
+        for (const auto& pair : wt.weights)
+        {
+            ecs.entity(pair.first.c_str()).get([&](const DijkstraMapData& dmap)
+                {
+                    if (dmap.map[pos.y * dd.width + pos.x] == 0)
+                    {
+                        player.each([&](const IsPlayer, Hitpoints& hp)
+                            {
+                                hp.hitpoints -= dmg.damage;
+                            });
+                    }
+                });
+        }
+    });
   });
+
+
 }
 

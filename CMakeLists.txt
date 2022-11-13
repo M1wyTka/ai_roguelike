@@ -25,6 +25,8 @@ enable_sanitizers(project_options)
 
 add_subdirectory(3rdParty)
 
+set(BUILD_SHARED_LIBS off)
+
 if (hw1)
     add_subdirectory(w1)
 endif()

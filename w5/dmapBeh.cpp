@@ -25,3 +25,9 @@ flecs::entity create_hive_monster(flecs::entity e)
   return e;
 }
 
+flecs::entity create_archer(flecs::entity e)
+{
+	e.set(DmapWeights{ {{ "archer_map", {1.f, 1.f} }} })
+		.set(DistanceDamage{});
+	return e;
+}

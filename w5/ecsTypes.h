@@ -72,12 +72,18 @@ enum Actions
   EA_MOVE_END,
   EA_ATTACK = EA_MOVE_END,
   EA_HEAL_SELF,
+  EA_SHOOT,
   EA_NUM
 };
 
 struct Action
 {
   int action = 0;
+};
+
+struct DistanceDamage 
+{
+    float damage = 4.f;
 };
 
 struct NumActions

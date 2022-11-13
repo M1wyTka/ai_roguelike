@@ -8,6 +8,8 @@
 #include "ecsTypes.h"
 #include "math.h"
 #include <limits>
+#include <array>
+#include <iostream>
 
 
 void gen_drunk_dungeon(char *tiles, size_t w, size_t h)
@@ -28,21 +30,23 @@ void gen_drunk_dungeon(char *tiles, size_t w, size_t h)
   std::uniform_int_distribution<size_t> widthDist(1, w-2);
   std::uniform_int_distribution<size_t> heightDist(1, h-2);
   std::uniform_int_distribution<size_t> dirDist(0, 3);
-  auto rndWd = std::bind(widthDist, widthGenerator);
-  auto rndHt = std::bind(heightDist, heightGenerator);
-  auto rndDir = std::bind(dirDist, dirGenerator);
+  
+  auto rndWd = [&]() { return widthDist(widthGenerator); }; 
+  auto rndHt = [&]() { return heightDist(heightGenerator); };
+  auto rndDir = [&]() { return dirDist(dirGenerator); }; 
 
-  const int dirs[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+  const std::vector<std::vector<int>> dirs = { { {1, 0}, {0, 1}, {-1, 0}, {0, -1} } }; 
 
   constexpr size_t numIter = 4;
   constexpr size_t maxExcavations = 200;
-  std::vector<Position> startPos;
+  std::vector<Position> startPos{};
+  startPos.reserve(numIter);
   for (size_t iter = 0; iter < numIter; ++iter)
   {
     // select random point on map
     size_t x = rndWd();
     size_t y = rndHt();
-    startPos.push_back({int(x), int(y)});
+    startPos.emplace_back(x, y);
     size_t numExcavations = 0;
     while (numExcavations < maxExcavations)
     {

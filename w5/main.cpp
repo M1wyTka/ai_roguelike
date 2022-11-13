@@ -6,6 +6,7 @@
 #include "roguelike.h"
 #include "dungeonGen.h"
 #include "goapPlanner.h"
+#include <array>
 
 enum EnemyDist
 {
@@ -185,54 +186,54 @@ static void update_camera(Camera2D &cam, flecs::world &ecs)
 
 int main(int /*argc*/, const char ** /*argv*/)
 {
-  int width = 1920;
-  int height = 1080;
-  InitWindow(width, height, "w3 AI MIPT");
+    int width = 1680;
+    int height = 720;
+    InitWindow(width, height, "w3 AI MIPT");
 
-  const int scrWidth = GetMonitorWidth(0);
-  const int scrHeight = GetMonitorHeight(0);
-  if (scrWidth < width || scrHeight < height)
-  {
-    width = std::min(scrWidth, width);
-    height = std::min(scrHeight - 150, height);
-    SetWindowSize(width, height);
-  }
+    const int scrWidth = GetMonitorWidth(0);
+    const int scrHeight = GetMonitorHeight(0);
+    if (scrWidth < width || scrHeight < height)
+    {
+        width = std::min(scrWidth, width);
+        height = std::min(scrHeight, height);
+        SetWindowSize(width, height);
+    }
 
-  flecs::world ecs;
-  {
+    flecs::world ecs;
+  
     constexpr size_t dungWidth = 50;
     constexpr size_t dungHeight = 50;
-    char *tiles = new char[dungWidth * dungHeight];
-    gen_drunk_dungeon(tiles, dungWidth, dungHeight);
+    std::array<char, dungWidth*dungHeight> tiles{};
+    gen_drunk_dungeon(tiles.data(), dungWidth, dungHeight);
     init_dungeon(ecs, tiles, dungWidth, dungHeight);
-  }
-  init_roguelike(ecs);
-  debug_enemy_planner();
-  debug_looter_planner();
+  
+    init_roguelike(ecs);
+    debug_enemy_planner();
+    debug_looter_planner();
 
-  Camera2D camera = { {0, 0}, {0, 0}, 0.f, 1.f };
-  camera.target = Vector2{ 0.f, 0.f };
-  camera.offset = Vector2{ width * 0.5f, height * 0.5f };
-  camera.rotation = 0.f;
-  camera.zoom = 0.125f;
+    Camera2D camera = { {0, 0}, {0, 0}, 0.f, 1.f };
+    camera.target = Vector2{ 0.f, 0.f };
+    camera.offset = Vector2{ width * 0.5f, height * 0.5f };
+    camera.rotation = 0.f;
+    camera.zoom = 0.125f;
 
-  SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
-  while (!WindowShouldClose())
-  {
-    process_turn(ecs);
-    update_camera(camera, ecs);
+    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+    while (!WindowShouldClose())
+    {
+        process_turn(ecs);
+        update_camera(camera, ecs);
 
-    BeginDrawing();
-      ClearBackground(BLACK);
-      BeginMode2D(camera);
-        ecs.progress();
-      EndMode2D();
-      print_stats(ecs);
-      // Advance to next frame. Process submitted rendering primitives.
-    EndDrawing();
-  }
+        BeginDrawing();
+            ClearBackground(BLACK);
+            BeginMode2D(camera);
+            ecs.progress();
+            EndMode2D();
+            print_stats(ecs);
+            // Advance to next frame. Process submitted rendering primitives.
+        EndDrawing();
+    }
 
-  CloseWindow();
+    CloseWindow();
 
-  return 0;
+    return 0;
 }

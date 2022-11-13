@@ -1,6 +1,7 @@
 #include "dijkstraMapGen.h"
 #include "ecsTypes.h"
 #include "dungeonUtils.h"
+#include <cmath>
 
 template<typename Callable>
 static void query_dungeon_data(flecs::world &ecs, Callable c)
@@ -80,16 +81,12 @@ void dmaps::gen_player_approach_map(flecs::world &ecs, std::vector<float> &map)
   });
 }
 
-void dmaps::gen_player_flee_map(flecs::world &ecs, std::vector<float> &map)
+void dmaps::gen_player_flee_map(flecs::world &ecs, std::vector<float>& ready_approach_map, std::vector<float> &map)
 {
-  gen_player_approach_map(ecs, map);
-  for (float &v : map)
-    if (v < invalid_tile_value)
-      v *= -1.2f;
-  query_dungeon_data(ecs, [&](const DungeonData &dd)
-  {
-    process_dmap(map, dd);
-  });
+    map.resize(ready_approach_map.size());
+    for (size_t i = 0; i < map.size(); i++)
+        if(ready_approach_map[i] < invalid_tile_value)
+            map[i] = -1.2f * ready_approach_map[i];
 }
 
 void dmaps::gen_hive_pack_map(flecs::world &ecs, std::vector<float> &map)
@@ -106,3 +103,52 @@ void dmaps::gen_hive_pack_map(flecs::world &ecs, std::vector<float> &map)
   });
 }
 
+bool is_view_obstucted(const DungeonData& dd, const Position& center, const Position& tile)
+{
+    constexpr uint32_t step_amount = 5;
+    const float step_x = float(center.x - tile.x) / step_amount;
+    const float step_y = float(center.y - tile.y) / step_amount;
+    float x = tile.x + step_x;
+    float y = tile.y + step_y;
+    for(int i = 1; i < step_amount; i++)
+    {
+        if (dd.tiles[std::round(y) * dd.width + std::round(x)] == dungeon::wall)
+            return true;
+        x += step_x;
+        y += step_y;
+    }
+    return false;
+}
+
+void dmaps::gen_archer_map(flecs::world& ecs, std::vector<float>& map)
+{
+    constexpr int radius = 2;
+    query_dungeon_data(ecs, [&](const DungeonData& dd)
+    {
+        init_tiles(map, dd);
+        query_characters_positions(ecs, [&](const Position& pos, const Team& t)
+            {    
+                if (t.team == 0) // player team hardcode
+                {  
+                    for (int i = -radius; i <= radius; i++) 
+                    {
+                        for (int j = -radius; j <= radius; j++)
+                        {
+                            int newX = pos.x + i;
+                            int newY = pos.y + j;
+                            if (newX < 0 || newX > dd.width || newY < 0 || newY > dd.height)
+                                continue;
+                            if ((i != -radius) && (i != radius) && (j != -radius) && (j != radius))
+                                continue;
+                            if (dd.tiles[newY * dd.width + newX] == dungeon::wall)
+                                continue;
+                            if (is_view_obstucted(dd, pos, { newX, newY }))
+                                continue;
+                            map[newY * dd.width + newX] = 0.f;
+                        }
+                    }
+                } 
+            });
+        process_dmap(map, dd);
+    });
+}

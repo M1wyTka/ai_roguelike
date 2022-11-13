@@ -90,13 +90,13 @@ static void register_roguelike_systems(flecs::world &ecs)
           for (size_t x = 0; x < dd.width; ++x)
           {
             float sum = 0.f;
-            for (const auto &pair : wt.weights)
+            for (const auto& [map_name, mul_pow] : wt.weights)
             {
-              ecs.entity(pair.first.c_str()).get([&](const DijkstraMapData &dmap)
+              ecs.entity(map_name.c_str()).get([&](const DijkstraMapData &dmap)
               {
                 float v = dmap.map[y * dd.width + x];
                 if (v < 1e5f)
-                  sum += powf(v * pair.second.mult, pair.second.pow);
+                  sum += powf(v * mul_pow.mult, mul_pow.pow);
                 else
                   sum += v;
               });
@@ -107,22 +107,22 @@ static void register_roguelike_systems(flecs::world &ecs)
           }
       });
     });
-  ecs.system<const DijkstraMapData>()
-    .term<VisualiseMap>()
-    .each([](const DijkstraMapData &dmap)
-    {
-      dungeonDataQuery.each([&](const DungeonData &dd)
-      {
-        for (size_t y = 0; y < dd.height; ++y)
-          for (size_t x = 0; x < dd.width; ++x)
-          {
-            const float val = dmap.map[y * dd.width + x];
-            if (val < 1e5f)
-              DrawText(TextFormat("%.1f", val),
-                  int((float(x) + 0.2f) * tile_size), int((float(y) + 0.5f) * tile_size), 150, WHITE);
-          }
-      });
-    });
+  //ecs.system<const DijkstraMapData>()
+  //  .term<VisualiseMap>()
+  //  .each([](const DijkstraMapData &dmap)
+  //  {
+  //    dungeonDataQuery.each([&](const DungeonData &dd)
+  //    {
+  //      for (size_t y = 0; y < dd.height; ++y)
+  //        for (size_t x = 0; x < dd.width; ++x)
+  //        {
+  //          const float val = dmap.map[y * dd.width + x];
+  //          if (val < 1e5f)
+  //            DrawText(TextFormat("%.1f", val),
+  //                int((float(x) + 0.2f) * tile_size), int((float(y) + 0.5f) * tile_size), 150, WHITE);
+  //        }
+  //    });
+  //  });
 }
 
 
@@ -142,10 +142,11 @@ void init_roguelike(flecs::world &ecs)
         UnloadTexture(texture);
       });
 
-  create_hive_monster(create_monster(ecs, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
-  create_hive_monster(create_monster(ecs, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
-  create_hive_monster(create_monster(ecs, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
-  create_hive(create_player_fleer(create_monster(ecs, Color{0, 255, 0, 255}, "minotaur_tex")));
+  create_archer(create_monster(ecs, Color{ 0xee, 0x00, 0xee, 0xff }, "minotaur_tex"));
+  //create_hive_monster(create_monster(ecs, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
+  //create_hive_monster(create_monster(ecs, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
+  //create_hive_monster(create_monster(ecs, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
+  //create_hive(create_player_fleer(create_monster(ecs, Color{0, 255, 0, 255}, "minotaur_tex")));
 
   create_player(ecs, "swordsman_tex");
 
@@ -154,18 +155,14 @@ void init_roguelike(flecs::world &ecs)
     .set(ActionLog{});
 }
 
-void init_dungeon(flecs::world &ecs, char *tiles, size_t w, size_t h)
+void init_dungeon(flecs::world &ecs, std::span<char> tiles, size_t w, size_t h)
 {
   flecs::entity wallTex = ecs.entity("wall_tex")
-    .set(Texture2D{LoadTexture("assets/wall.png")});
+    .set(Texture2D{LoadTexture("assets/wall1.png")});
   flecs::entity floorTex = ecs.entity("floor_tex")
-    .set(Texture2D{LoadTexture("assets/floor.png")});
+    .set(Texture2D{LoadTexture("assets/floor1.png")});
 
-  std::vector<char> dungeonData;
-  dungeonData.resize(w * h);
-  for (size_t y = 0; y < h; ++y)
-    for (size_t x = 0; x < w; ++x)
-      dungeonData[y * w + x] = tiles[y * w + x];
+  std::vector<char> dungeonData(tiles.begin(), tiles.end());
   ecs.entity("dungeon")
     .set(DungeonData{dungeonData, w, h});
 
@@ -270,6 +267,7 @@ static void process_actions(flecs::world &ecs)
       else
         mpos = nextPos;
     });
+
     // now move
     processActions.each([&](Action &a, Position &pos, MovePos &mpos, const MeleeDamage &, const Team&)
     {
@@ -387,7 +385,7 @@ void process_turn(flecs::world &ecs)
       .set(DijkstraMapData{approachMap});
 
     std::vector<float> fleeMap;
-    dmaps::gen_player_flee_map(ecs, fleeMap);
+    dmaps::gen_player_flee_map(ecs, approachMap, fleeMap);
     ecs.entity("flee_map")
       .set(DijkstraMapData{fleeMap});
 
@@ -398,8 +396,15 @@ void process_turn(flecs::world &ecs)
 
     //ecs.entity("flee_map").add<VisualiseMap>();
     ecs.entity("hive_follower_sum")
-      .set(DmapWeights{{{"hive_map", {1.f, 1.f}}, {"approach_map", {1.8f, 0.8f}}}})
-      .add<VisualiseMap>();
+        .set(DmapWeights{ {{"hive_map", {1.f, 1.f}}, {"approach_map", {1.8f, 0.8f}}} })
+        //.add<VisualiseMap>();
+        ;
+    std::vector<float> archerMap;
+    dmaps::gen_archer_map(ecs, archerMap);
+    ecs.entity("archer_map")
+        .set(DijkstraMapData{ archerMap })
+        .set(DmapWeights{ {{"archer_map", {1.f, 1.f}} }})
+        .add<VisualiseMap>();
   }
 }
 
